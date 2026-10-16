@@ -48,14 +48,14 @@
 #define DIGIT_COUNT 10
 #define OPERATOR_COUNT 6
 
-#define BALL_COUNT (DIGIT_COUNT+OPERATOR_COUNT)
+#define BALL_COUNT (DIGIT_COUNT+OPERATOR_COUNT+1)
 
 static struct image balls[BALL_COUNT];
 static struct image cards[DIGIT_COUNT];
 
-static struct image white_ball;
+static struct image *white_ball = balls+DIGIT_COUNT+OPERATOR_COUNT;
 
-static struct {
+struct object {
     float x;
     float y;
 
@@ -63,17 +63,11 @@ static struct {
     float vy;
 
     float speed;
-} ball_positions[BALL_COUNT];
+};
 
-static struct {
-    float x;
-    float y;
+static struct object ball_positions[BALL_COUNT];
 
-    float vx;
-    float vy;
-
-    float speed;
-} white;
+static struct object *white = ball_positions+DIGIT_COUNT+OPERATOR_COUNT;
 
 static char digits[DISPLAY_LEN];
 
@@ -95,6 +89,8 @@ static char *ball_images[BALL_COUNT] = {
     "ball_mul.png",
     "ball_div.png",
     "ball_pow.png",
+
+    "white_ball.png"
 };
 
 static char *cards_images[DIGIT_COUNT] = {
@@ -136,12 +132,12 @@ static void render(unsigned long ms, void *data) {
         }
     }
 
-    gfx_image(&white_ball, white.x, white.y);
+    gfx_image(white_ball, white->x, white->y);
 
-    if(white.speed < 0.05){
+    if(white->speed < 0.05){
         int x, y;
-        int px = white.x+white_ball.w/2;
-        int py = white.y+white_ball.h/2;
+        int px = white->x+white_ball->w/2;
+        int py = white->y+white_ball->h/2;
 
         int sx;
         int sy;
@@ -155,8 +151,8 @@ static void render(unsigned long ms, void *data) {
 
         a = -atan2(px-x, py-y)-3.14/2;
 
-        sx = px+cos(a)*white_ball.w/2;
-        sy = py+sin(a)*white_ball.w/2;
+        sx = px+cos(a)*white_ball->w/2;
+        sy = py+sin(a)*white_ball->w/2;
 
         ex = px+cos(a)*200;
         ey = py+sin(a)*200;
@@ -166,10 +162,10 @@ static void render(unsigned long ms, void *data) {
         if(gfx_click(B_LEFT)){
             /* Launch the white ball */
 
-            white.vx = -cos(a);
-            white.vy = -sin(a);
+            white->vx = -cos(a);
+            white->vy = -sin(a);
 
-            white.speed = 12000;
+            white->speed = 12000;
         }
     }
 
@@ -191,42 +187,93 @@ static void render(unsigned long ms, void *data) {
     }
 
     /* Handle collisions between balls */
-    white.x += white.vx*white.speed*delta;
-    white.y += white.vy*white.speed*delta;
+    {
+        size_t i;
 
-    if(white.x > width-white_ball.w){
-        white.vx = -white.vx;
-        white.x = width-white_ball.w;
+        for(i=0;i<BALL_COUNT;i++){
+            struct object *ball = ball_positions+i;
+            struct image *ball_image = balls+i;
 
-        white.speed -= 1000;
+            size_t n;
+
+            ball->x += ball->vx*ball->speed*delta;
+            ball->y += ball->vy*ball->speed*delta;
+
+            for(n=0;n<BALL_COUNT;n++){
+                struct object *other = ball_positions+n;
+
+                float dx = other->x-ball->x;
+                float dy = other->y-ball->y;
+
+                float d;
+
+                if((d = sqrt(dx*dx+dy*dy)) < balls[i].w/2+balls[n].w/2){
+                    /* Two balls collide */
+
+                    float vx = other->vx;
+                    float vy = other->vy;
+
+                    float d1, d2;
+
+                    other->vx += ball->vx;
+                    other->vy += ball->vy;
+
+                    ball->vx -= vx;
+                    ball->vy -= vy;
+
+                    d1 = (ball->speed+other->speed)/2;
+                    ball->speed = d1;
+                    other->speed = d1;
+
+                    d1 = sqrt(ball->vx*ball->vx+ball->vy*ball->vy);
+                    d2 = sqrt(other->vx*other->vx+other->vy*other->vy);
+
+                    if(!d1) d1 = FLT_MIN;
+                    if(!d2) d2 = FLT_MIN;
+
+                    ball->vx /= d1;
+                    ball->vy /= d1;
+
+                    other->vx /= d2;
+                    other->vy /= d2;
+                }
+            }
+
+            if(ball->x > width-ball_image->w){
+                ball->vx = -ball->vx;
+                ball->x = width-ball_image->w;
+
+                ball->speed -= 1000;
+            }
+            if(ball->x < 0){
+                ball->vx = -ball->vx;
+                ball->x = 0;
+
+                ball->speed -= 1000;
+            }
+            if(ball->y > height-ball_image->h){
+                ball->vy = -ball->vy;
+                ball->y = height-ball_image->h;
+
+                ball->speed -= 1000;
+            }
+            if(ball->y < cards->h){
+                ball->vy = -ball->vy;
+                ball->y = cards->h;
+
+                ball->speed -= 1000;
+            }
+
+            last_tick += ms;
+            while(last_tick >= 20){
+                ball->speed -= 500;
+
+                last_tick -= 20;
+            }
+
+            if(ball->speed < 0) ball->speed = 0;
+        }
     }
-    if(white.x < 0){
-        white.vx = -white.vx;
-        white.x = 0;
-
-        white.speed -= 1000;
-    }
-    if(white.y > height-white_ball.h){
-        white.vy = -white.vy;
-        white.y = height-white_ball.h;
-
-        white.speed -= 1000;
-    }
-    if(white.y < cards->h){
-        white.vy = -white.vy;
-        white.y = cards->h;
-
-        white.speed -= 1000;
-    }
-
-    last_tick += ms;
-    while(last_tick >= 20){
-        white.speed -= 500;
-
-        last_tick -= 20;
-    }
-
-    if(white.speed < 0) white.speed = 0;
 }
 
 int main(int argc, char **argv) {
@@ -244,11 +291,6 @@ int main(int argc, char **argv) {
         for(i=0;i<DIGIT_COUNT;i++){
             /* FIXME: Free loaded images on failure. */
 
-            if(gfx_load_image(balls+i, ball_images[i])){
-                fprintf(stderr, "%s: Failed to load image!\n", *argv);
-
-                return 1;
-            }
             if(gfx_load_image(cards+i, cards_images[i])){
                 fprintf(stderr, "%s: Failed to load image!\n", *argv);
 
@@ -256,27 +298,32 @@ int main(int argc, char **argv) {
             }
         }
 
-        if(gfx_load_image(&white_ball, "white_ball.png")){
-            fprintf(stderr, "%s: Failed to load image!\n", *argv);
+        for(i=0;i<BALL_COUNT;i++){
+            if(gfx_load_image(balls+i, ball_images[i])){
+                fprintf(stderr, "%s: Failed to load image!\n", *argv);
 
-            return 1;
+                return 1;
+            }
         }
     }
-
-    white.x = white_ball.w;
-    white.y = (480-white_ball.h-cards->h)/2;
-
-    white.vx = 0;
-    white.vy = 0;
 
     {
         size_t i;
 
         for(i=0;i<BALL_COUNT;i++){
             ball_positions[i].x = (640-4*balls->w)/2+(i%4)*balls->w;
-            ball_positions[i].y = (480-4*balls->h-cards->h)+(i/4)*balls->h;
+            ball_positions[i].y = (480-4*balls->h-cards->h)/2+cards->h+
+                                  (i/4)*balls->h;
+
+            ball_positions[i].vx = 1;
+            ball_positions[i].vy = 0;
+
+            ball_positions[i].speed = 0;
         }
     }
+
+    white->x = white_ball->w/2;
+    white->y = (480-white_ball->h-cards->h)/2+cards->h;
 
     gfx_clear_color(0, 127, 0);
 
