@@ -1,0 +1,11 @@
+                    BILLARDCALC
+                     by Mibi88
+
+  A silly project of a silly calculator.
+
+    COMPILING
+
+  This project depends on OpenGL, GLU and the SDL 1.2. Compile it by running
+the following command:
+
+ $ CC=c89 make
