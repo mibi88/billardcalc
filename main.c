@@ -199,13 +199,15 @@ static void render(unsigned long ms, void *data) {
             ball->x += ball->vx*ball->speed*delta;
             ball->y += ball->vy*ball->speed*delta;
 
-            for(n=0;n<BALL_COUNT;n++){
+            for(n=i+1;n<BALL_COUNT;n++){
                 struct object *other = ball_positions+n;
 
                 float dx = other->x-ball->x;
                 float dy = other->y-ball->y;
 
                 float d;
+
+                if(n == i) continue;
 
                 if((d = sqrt(dx*dx+dy*dy)) < balls[i].w/2+balls[n].w/2){
                     /* Two balls collide */
@@ -218,8 +220,11 @@ static void render(unsigned long ms, void *data) {
                     other->vx += ball->vx;
                     other->vy += ball->vy;
 
-                    ball->vx -= vx;
-                    ball->vy -= vy;
+                    ball->vx += vx;
+                    ball->vy += vy;
+
+                    other->x = ball->x+(dx/d)*(balls[i].w/2+balls[n].w/2+0.01);
+                    other->y = ball->y+(dy/d)*(balls[i].w/2+balls[n].w/2+0.01);
 
                     d1 = (ball->speed+other->speed)/2;
                     ball->speed = d1;
