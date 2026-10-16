@@ -210,6 +210,7 @@ void gfx_rect(int x, int y, unsigned int w, unsigned int h,
 
 void gfx_get_mouse_position(int *x, int *y);
 void gfx_get_size(unsigned int *w, unsigned int *h);
+int gfx_click(int b);
 int gfx_buttondown(int b);
 int gfx_keydown(int key);
 unsigned char gfx_char(void);

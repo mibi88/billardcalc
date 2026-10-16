@@ -76,6 +76,7 @@ static int avoid_closing = 0;
 static unsigned char button_lut[B_LUT_SIZE];
 
 static unsigned char buttons[B_AMOUNT];
+static unsigned char clicked[B_AMOUNT];
 
 static unsigned int width, height;
 static unsigned char bpp;
@@ -268,6 +269,7 @@ int gfx_init(unsigned int w, unsigned int h, char *title) {
 
     memset(keys, 0, SDLK_LAST);
     memset(buttons, 0, B_AMOUNT);
+    memset(clicked, 0, B_AMOUNT);
     mx = 0;
     my = 0;
     c = '\0';
@@ -420,7 +422,7 @@ void gfx_image(struct image *img, int x, int y) {
     glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, img->id);
 
-    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL);
+    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
 
     glBegin(GL_QUADS);
     glTexCoord2f(0, 0);
@@ -529,6 +531,10 @@ int gfx_buttondown(int b) {
     return buttons[b];
 }
 
+int gfx_click(int b) {
+    return clicked[b];
+}
+
 int gfx_keydown(int key) {
     return keys[sdl_keys[key]];
 }
@@ -559,6 +565,8 @@ void gfx_mainloop(void render(unsigned long ms, void *data), void *data) {
         int scrolled = 0;
 
         SDL_Event event;
+
+        memset(clicked, 0, B_AMOUNT);
 
         last = SDL_GetTicks();
 
@@ -607,6 +615,7 @@ void gfx_mainloop(void render(unsigned long ms, void *data), void *data) {
                                 if(id == B_SCROLLUP || id == B_SCROLLDOWN){
                                     scrolled = 1;
                                 }
+                                if(!clicked[id]) clicked[id] = 1;
                             }
                         }
                     }

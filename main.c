@@ -36,6 +36,7 @@
 
 #include "gfx.h"
 
+#include <float.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -60,6 +61,8 @@ static struct {
 
     float vx;
     float vy;
+
+    float speed;
 } ball_positions[BALL_COUNT];
 
 static struct {
@@ -68,6 +71,8 @@ static struct {
 
     float vx;
     float vy;
+
+    float speed;
 } white;
 
 static char digits[DISPLAY_LEN];
@@ -105,29 +110,16 @@ static char *cards_images[DIGIT_COUNT] = {
     "card_9.png"
 };
 
-#define ABS(x) ((x) < 0 ? -(x) : (x))
+unsigned long last_tick = 0;
+
 static void render(unsigned long ms, void *data) {
     int width;
     int height;
 
+    float delta = (float)ms/1000;
+    if(!delta) delta = FLT_MIN;
+
     gfx_get_size(&width, &height);
-
-    {
-        size_t i;
-        int w = 0;
-        int x;
-
-        for(i=0;i<DISPLAY_LEN;i++){
-            w += cards[digits[i]-'0'].w;
-        }
-
-        x = (width-w)/2;
-
-        for(i=0;i<DISPLAY_LEN;i++){
-            gfx_image(cards+digits[i]-'0', x, 0);
-            x += cards[digits[i]-'0'].w;
-        }
-    }
 
     {
         size_t i;
@@ -146,7 +138,7 @@ static void render(unsigned long ms, void *data) {
 
     gfx_image(&white_ball, white.x, white.y);
 
-    if(ABS(white.vx) < 0.05 && ABS(white.vy) < 0.05){
+    if(white.speed < 0.05){
         int x, y;
         int px = white.x+white_ball.w/2;
         int py = white.y+white_ball.h/2;
@@ -171,31 +163,70 @@ static void render(unsigned long ms, void *data) {
 
         gfx_line(sx, sy, ex, ey, 150, 66, 1, 255, 10);
 
-        if(gfx_buttondown(B_LEFT)){
-            white.vx = -cos(a)*3;
-            white.vy = -sin(a)*3;
+        if(gfx_click(B_LEFT)){
+            /* Launch the white ball */
+
+            white.vx = -cos(a);
+            white.vy = -sin(a);
+
+            white.speed = 12000;
         }
     }
 
-    white.x += white.vx;
-    white.y += white.vy;
+    {
+        size_t i;
+        int w = 0;
+        int x;
 
-    if(white.x > width-white_ball.w && white.vx > 0){
+        for(i=0;i<DISPLAY_LEN;i++){
+            w += cards[digits[i]-'0'].w;
+        }
+
+        x = (width-w)/2;
+
+        for(i=0;i<DISPLAY_LEN;i++){
+            gfx_image(cards+digits[i]-'0', x, 0);
+            x += cards[digits[i]-'0'].w;
+        }
+    }
+
+    /* Handle collisions between balls */
+    white.x += white.vx*white.speed*delta;
+    white.y += white.vy*white.speed*delta;
+
+    if(white.x > width-white_ball.w){
         white.vx = -white.vx;
         white.x = width-white_ball.w;
+
+        white.speed -= 1000;
     }
-    if(white.x < white_ball.w && white.vx < 0){
+    if(white.x < 0){
         white.vx = -white.vx;
-        white.x = white_ball.w;
+        white.x = 0;
+
+        white.speed -= 1000;
     }
-    if(white.y > height-white_ball.h && white.vy > 0){
+    if(white.y > height-white_ball.h){
         white.vy = -white.vy;
         white.y = height-white_ball.h;
+
+        white.speed -= 1000;
     }
-    if(white.y < white_ball.h+cards->h && white.vy < 0){
+    if(white.y < cards->h){
         white.vy = -white.vy;
-        white.y = white_ball.h+cards->h;
+        white.y = cards->h;
+
+        white.speed -= 1000;
     }
+
+    last_tick += ms;
+    while(last_tick >= 20){
+        white.speed -= 500;
+
+        last_tick -= 20;
+    }
+
+    if(white.speed < 0) white.speed = 0;
 }
 
 int main(int argc, char **argv) {
