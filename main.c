@@ -289,10 +289,16 @@ int main(int argc, char **argv) {
         size_t i;
 
         for(i=0;i<DIGIT_COUNT;i++){
-            /* FIXME: Free loaded images on failure. */
-
             if(gfx_load_image(cards+i, cards_images[i])){
                 fprintf(stderr, "%s: Failed to load image!\n", *argv);
+
+                if(i){
+                    i--;
+
+                    for(;i--;){
+                        gfx_free_image(cards+i);
+                    }
+                }
 
                 return 1;
             }
@@ -301,6 +307,16 @@ int main(int argc, char **argv) {
         for(i=0;i<BALL_COUNT;i++){
             if(gfx_load_image(balls+i, ball_images[i])){
                 fprintf(stderr, "%s: Failed to load image!\n", *argv);
+
+                if(i){
+                    i--;
+
+                    for(;i--;){
+                        gfx_free_image(balls+i);
+                    }
+
+                    for(i=0;i<DIGIT_COUNT;i++) gfx_free_image(cards+i);
+                }
 
                 return 1;
             }
@@ -328,6 +344,13 @@ int main(int argc, char **argv) {
     gfx_clear_color(0, 127, 0);
 
     gfx_mainloop(render, NULL);
+
+    {
+        size_t i;
+
+        for(i=0;i<DIGIT_COUNT;i++) gfx_free_image(cards+i);
+        for(i=0;i<BALL_COUNT;i++) gfx_free_image(balls+i);
+    }
 
     gfx_free();
 
