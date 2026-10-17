@@ -108,6 +108,7 @@ static char *cards_images[DIGIT_COUNT] = {
 
 unsigned long last_tick = 0;
 
+#define ABS(x) ((x) ? -(x) : (x))
 static void render(unsigned long ms, void *data) {
     int width;
     int height;
@@ -212,26 +213,45 @@ static void render(unsigned long ms, void *data) {
                 if((d = sqrt(dx*dx+dy*dy)) < balls[i].w/2+balls[n].w/2){
                     /* Two balls collide */
 
-                    float vx = other->vx;
-                    float vy = other->vy;
+                    /* I adapted formulas from
+                     * Wikipedia contributors. (2026, April 30). Elastic
+                     * collision. In Wikipedia, The Free Encyclopedia.
+                     * Retrieved 14:18, October 17, 2026, from
+                     * https://en.wikipedia.org/w/index.php
+                     * ?title=Elastic_collision&oldid=1351860510
+                     * #Derivation_of_two_dimensional_solution
+                     * to calculate the direction and the speed in which the
+                     * balls should move. However I'm not sure if I've
+                     * tweaked them correctly for my usecase, so maybe I'm
+                     * doing things wrong.
+                     */
+                    float nx = dx/d;
+                    float ny = dy/d;
 
-                    float d1, d2;
+                    float dvx;
+                    float dvy;
 
-                    other->vx += ball->vx;
-                    other->vy += ball->vy;
+                    float l;
 
-                    ball->vx += vx;
-                    ball->vy += vy;
+                    float d1;
+                    float d2;
 
-                    other->x = ball->x+(dx/d)*(balls[i].w/2+balls[n].w/2+0.01);
-                    other->y = ball->y+(dy/d)*(balls[i].w/2+balls[n].w/2+0.01);
+                    dvx = other->vx*other->speed-ball->vx*ball->speed;
+                    dvy = other->vy*other->speed-ball->vy*ball->speed;
 
-                    d1 = (ball->speed+other->speed)/2;
-                    ball->speed = d1;
-                    other->speed = d1;
+                    l = -(dvx*nx+dvy*ny);
+
+                    ball->vx = ball->vx*ball->speed-l*nx;
+                    ball->vy = ball->vy*ball->speed-l*ny;
+
+                    other->vx = other->vx*other->speed+l*nx;
+                    other->vy = other->vy*other->speed+l*ny;
 
                     d1 = sqrt(ball->vx*ball->vx+ball->vy*ball->vy);
                     d2 = sqrt(other->vx*other->vx+other->vy*other->vy);
+
+                    ball->speed = d1;
+                    other->speed = d2;
 
                     if(!d1) d1 = FLT_MIN;
                     if(!d2) d2 = FLT_MIN;
@@ -241,6 +261,9 @@ static void render(unsigned long ms, void *data) {
 
                     other->vx /= d2;
                     other->vy /= d2;
+
+                    other->x = ball->x+(dx/d)*(balls[i].w/2+balls[n].w/2+0.01);
+                    other->y = ball->y+(dy/d)*(balls[i].w/2+balls[n].w/2+0.01);
                 }
             }
 
