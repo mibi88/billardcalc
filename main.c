@@ -269,6 +269,7 @@ static void input(ptrdiff_t id) {
         if(last_op == BALL_EQ) last_op = BALL_WHITE;
 
         memcpy(displayed, digits, DISPLAY_LEN);
+        sign = BALL_ADD;
 
         return;
     }
@@ -295,13 +296,6 @@ static void render(unsigned long ms, void *data) {
 
         for(i=0;i<BALL_COUNT;i++){
             gfx_image(balls+i, ball_positions[i].x, ball_positions[i].y);
-
-            /*if(ball_positions[i].x > width-balls[i].w){
-                ball_positions[i].x = width-balls[i].w;
-            }
-            if(ball_positions[i].y > height-balls[i].h){
-                ball_positions[i].y = height-balls[i].h;
-            }*/
         }
     }
 
@@ -358,7 +352,7 @@ static void render(unsigned long ms, void *data) {
         gfx_image(cards+sign, x-cards->w, 0);
 
         for(i=0;i<DISPLAY_LEN;i++){
-            gfx_image(cards+digits[i]-'0', x, 0);
+            gfx_image(cards+displayed[i]-'0', x, 0);
             x += cards[digits[i]-'0'].w;
         }
     }
@@ -484,6 +478,7 @@ int main(int argc, char **argv) {
     (void)argc;
 
     memset(digits, '0', DISPLAY_LEN);
+    memset(displayed, '0', DISPLAY_LEN);
 
 #if 0
     {
