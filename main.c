@@ -44,10 +44,12 @@
 
 #include <math.h>
 
-#define DISPLAY_LEN 9
+#define DISPLAY_LEN 5
 
 #define DIGIT_COUNT 10
 #define OPERATOR_COUNT 6
+
+#define FORCE_MAX 12000
 
 #define BALL_COUNT (DIGIT_COUNT+OPERATOR_COUNT+1)
 
@@ -84,7 +86,7 @@ enum {
 };
 
 static struct image balls[BALL_COUNT];
-static struct image cards[DIGIT_COUNT];
+static struct image cards[BALL_COUNT];
 
 static struct image *white_ball = balls+DIGIT_COUNT+OPERATOR_COUNT;
 
@@ -93,6 +95,7 @@ static struct object ball_positions[BALL_COUNT];
 static struct object *white = ball_positions+DIGIT_COUNT+OPERATOR_COUNT;
 
 static char digits[DISPLAY_LEN];
+static char displayed[DISPLAY_LEN];
 
 static char *ball_images[BALL_COUNT] = {
     "ball_0.png",
@@ -138,23 +141,22 @@ static char *cards_images[BALL_COUNT] = {
     "card_bad.png"
 };
 
+char op_c[] = "=+-*/^ ";
+
 static unsigned long last_tick = 0;
 
-static size_t cur = DISPLAY_LEN-1;
+static unsigned long force = 0;
 
 static long int tmp = 0;
 static long int res = 0;
+ptrdiff_t sign = BALL_ADD;
 ptrdiff_t last_op = BALL_WHITE;
-ptrdiff_t sign = BALL_WHITE;
-int did_eq = 0;
-
-static int result_shown = 0;
 
 static long int number(void) {
     size_t i;
     long int n = 0;
 
-    for(i=DISPLAY_LEN;i--;){
+    for(i=0;i<DISPLAY_LEN;i++){
         n *= 10;
         n += digits[i]-'0';
     }
@@ -169,18 +171,24 @@ static void display_result(long int n) {
         sign = BALL_SUB;
         n = -n;
     }else{
-        sign = BALL_WHITE;
+        sign = BALL_ADD;
     }
 
-    for(i=0;i<DISPLAY_LEN;i++){
+    for(i=DISPLAY_LEN;i--;){
         digits[i] = '0'+n%10;
         n /= 10;
     }
 
-    result_shown = 1;
+    memcpy(displayed, digits, DISPLAY_LEN);
+
+    fputc(op_c[last_op], stdout);
+    fputc(sign == BALL_ADD ? '+' : '-', stdout);
+    fwrite(digits, 1, DISPLAY_LEN, stdout);
+    puts("");
 }
 
 static void operation(ptrdiff_t op, long int n) {
+    printf("Operation %c!\n", op_c[op-BALL_EQ]);
     switch(op){
         case BALL_EQ:
             display_result(res);
@@ -188,7 +196,8 @@ static void operation(ptrdiff_t op, long int n) {
             break;
 
         case BALL_ADD:
-            res += tmp;
+            res += n;
+            tmp = n;
 
             display_result(res);
 
@@ -196,6 +205,7 @@ static void operation(ptrdiff_t op, long int n) {
 
         case BALL_SUB:
             res -= n;
+            tmp = n;
 
             display_result(res);
 
@@ -203,6 +213,7 @@ static void operation(ptrdiff_t op, long int n) {
 
         case BALL_MUL:
             res *= n;
+            tmp = n;
 
             display_result(res);
 
@@ -210,7 +221,8 @@ static void operation(ptrdiff_t op, long int n) {
 
         case BALL_DIV:
             if(n) res /= n;
-            else res = 9999999999;
+            else res = 99999;
+            tmp = n;
 
             display_result(res);
 
@@ -218,49 +230,51 @@ static void operation(ptrdiff_t op, long int n) {
 
         case BALL_POW:
         {
-            long i;
+            long int i;
+            long int v = res;
 
             if(n > 0){
-                for(i=0;i<n;i++){
-                    res *= res;
+                for(i=1;i<n;i++){
+                    res *= v;
                 }
             }else{
                 res = 0;
             }
+            tmp = n;
 
             display_result(res);
 
             break;
         }
+
+        case BALL_WHITE:
+            res = n;
+
+            display_result(res);
+
+            break;
+
+        default:
+            return;
     }
 
-    last_op = op;
+    memset(digits, '0', DISPLAY_LEN);
 }
 
 static void input(ptrdiff_t id) {
-    if(result_shown){
-        memset(digits, '0', DISPLAY_LEN);
-        cur = DISPLAY_LEN-1;
-
-        result_shown = 0;
-    }
-
     if(id <= BALL_9){
-        digits[cur] = '0'+id;
-        if(cur) cur--;
-        else cur = DISPLAY_LEN-1;
+        memmove(digits, digits+1, DISPLAY_LEN-1);
+        digits[DISPLAY_LEN-1] = '0'+id;
+
+        if(last_op == BALL_EQ) last_op = BALL_WHITE;
+
+        memcpy(displayed, digits, DISPLAY_LEN);
 
         return;
     }
 
-    if(id == BALL_EQ){
-        if(!did_eq) tmp = number();
-        operation(last_op, tmp);
-        did_eq = 1;
-    }else{
-        did_eq = 0;
-        operation(id, (tmp = number()));
-    }
+    operation(last_op, number());
+    last_op = id;
 }
 
 #define ABS(x) ((x) ? -(x) : (x))
@@ -310,21 +324,22 @@ static void render(unsigned long ms, void *data) {
 
         a = -atan2(px-x, py-y)-3.14/2;
 
-        sx = px+cos(a)*white_ball->w/2;
-        sy = py+sin(a)*white_ball->w/2;
+        sx = px+cos(a)*(white_ball->w/2+force*50/FORCE_MAX);
+        sy = py+sin(a)*(white_ball->w/2+force*50/FORCE_MAX);
 
-        ex = px+cos(a)*200;
-        ey = py+sin(a)*200;
+        ex = px+cos(a)*(200+force*50/FORCE_MAX);
+        ey = py+sin(a)*(200+force*50/FORCE_MAX);
 
         gfx_line(sx, sy, ex, ey, 150, 66, 1, 255, 10);
 
-        if(gfx_click(B_LEFT)){
+        if(!gfx_buttondown(B_LEFT) && force){
             /* Launch the white ball */
 
             white->vx = -cos(a);
             white->vy = -sin(a);
 
-            white->speed = 12000;
+            white->speed = force;
+            force = 0;
         }
     }
 
@@ -339,8 +354,8 @@ static void render(unsigned long ms, void *data) {
 
         x = (width-w)/2;
 
-        /*gfx_image(cards+last_op, x-cards->w*2, 0);
-        gfx_image(cards+sign, x-cards->w, 0);*/
+        gfx_image(cards+last_op, x-cards->w*2, 0);
+        gfx_image(cards+sign, x-cards->w, 0);
 
         for(i=0;i<DISPLAY_LEN;i++){
             gfx_image(cards+digits[i]-'0', x, 0);
@@ -453,6 +468,11 @@ static void render(unsigned long ms, void *data) {
                 ball->speed -= 500;
 
                 last_tick -= 20;
+
+                if(gfx_buttondown(B_LEFT)){
+                    force += 100;
+                    if(force > FORCE_MAX) force = FORCE_MAX;
+                }
             }
 
             if(ball->speed < 0) ball->speed = 0;
@@ -463,18 +483,35 @@ static void render(unsigned long ms, void *data) {
 int main(int argc, char **argv) {
     (void)argc;
 
+    memset(digits, '0', DISPLAY_LEN);
+
+#if 0
+    {
+        int c;
+
+        while((c = getc(stdin)) != EOF){
+            char *p;
+
+            fputc(c, stdout);
+            if(c >= '0' && c <= '9') input(BALL_0+(c-'0'));
+            if((p = strchr(op_c, c)) != NULL){
+                input(BALL_EQ+p-op_c);
+            }
+        }
+    }
+#endif
+
     if(gfx_init(640, 480, "Billard calculator")){
         fprintf(stderr, "%s: Failed to open window!\n", *argv);
 
         return 1;
     }
 
-    memset(digits, '0', DISPLAY_LEN);
-
     {
         size_t i;
 
         for(i=0;i<BALL_COUNT;i++){
+            puts(cards_images[i]);
             if(gfx_load_image(cards+i, cards_images[i])){
                 fprintf(stderr, "%s: Failed to load image!\n", *argv);
 
